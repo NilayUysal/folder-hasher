@@ -47,6 +47,18 @@ def md5_of(path: Path) -> str:
     return h.hexdigest()
 
 
+def sha1_of(path: Path) -> str:
+    """Stream the file and return its SHA1 hex digest."""
+    h = hashlib.sha1()
+    with path.open("rb") as f:
+        while True:
+            chunk = f.read(CHUNK)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def _ts(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
 
@@ -73,6 +85,7 @@ def inventory_one(path: Path, root: Path) -> dict:
     try:
         row["sha256"] = sha256_of(path)
         row["md5"] = md5_of(path)
+        row["sha1"] = sha1_of(path)
     except (OSError, PermissionError) as e:
         row["error"] = f"hash failed: {e}"
     return row
@@ -80,7 +93,7 @@ def inventory_one(path: Path, root: Path) -> dict:
 
 CSV_FIELDS = [
     "relative_path", "name", "size_bytes", "modified_utc",
-    "sha256", "md5", "path", "error",
+    "sha256", "md5", "sha1", "path", "error",
 ]
 
 
