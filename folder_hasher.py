@@ -23,40 +23,24 @@ from typing import Iterable, List, Optional
 CHUNK = 1024 * 1024  # 1 MiB read buffer
 
 
-def sha256_of(path: Path) -> str:
-    """Stream the file and return its SHA256 hex digest."""
-    h = hashlib.sha256()
+def hash_all(path: Path) -> dict:
+    """Stream the file once and return md5, sha1, sha256 digests as a dict."""
+    md5    = hashlib.md5()
+    sha1   = hashlib.sha1()
+    sha256 = hashlib.sha256()
     with path.open("rb") as f:
         while True:
             chunk = f.read(CHUNK)
             if not chunk:
                 break
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def md5_of(path: Path) -> str:
-    """Stream the file and return its MD5 hex digest."""
-    h = hashlib.md5()
-    with path.open("rb") as f:
-        while True:
-            chunk = f.read(CHUNK)
-            if not chunk:
-                break
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def sha1_of(path: Path) -> str:
-    """Stream the file and return its SHA1 hex digest."""
-    h = hashlib.sha1()
-    with path.open("rb") as f:
-        while True:
-            chunk = f.read(CHUNK)
-            if not chunk:
-                break
-            h.update(chunk)
-    return h.hexdigest()
+            md5.update(chunk)
+            sha1.update(chunk)
+            sha256.update(chunk)
+    return {
+        "md5":    md5.hexdigest(),
+        "sha1":   sha1.hexdigest(),
+        "sha256": sha256.hexdigest(),
+    }
 
 
 def _ts(epoch: float) -> str:
@@ -83,9 +67,7 @@ def inventory_one(path: Path, root: Path) -> dict:
         "path":          str(path),
     }
     try:
-        row["sha256"] = sha256_of(path)
-        row["md5"] = md5_of(path)
-        row["sha1"] = sha1_of(path)
+        row.update(hash_all(path))
     except (OSError, PermissionError) as e:
         row["error"] = f"hash failed: {e}"
     return row
