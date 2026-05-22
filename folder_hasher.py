@@ -17,29 +17,67 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Tuple
 
 
 CHUNK = 1024 * 1024  # 1 MiB read buffer
 
 
+# File signature table: (magic prefix, label, valid extensions)
+MAGIC_TABLE: List[Tuple[bytes, str, set]] = [
+    (b"\x89PNG\r\n\x1a\n",    "png",      {".png"}),
+    (b"\xff\xd8\xff",         "jpeg",     {".jpg", ".jpeg"}),
+    (b"GIF87a",               "gif",      {".gif"}),
+    (b"GIF89a",               "gif",      {".gif"}),
+    (b"%PDF-",                "pdf",      {".pdf"}),
+    (b"PK\x03\x04",           "zip",      {".zip", ".jar", ".docx", ".xlsx", ".pptx", ".odt"}),
+    (b"\x1f\x8b\x08",         "gzip",     {".gz", ".tgz"}),
+    (b"7z\xbc\xaf\x27\x1c",   "7z",       {".7z"}),
+    (b"MZ",                   "pe",       {".exe", ".dll", ".sys", ".scr"}),
+    (b"\x7fELF",              "elf",      {".bin", ".o", ".so", ""}),
+    (b"SQLite format 3\x00",  "sqlite",   {".db", ".sqlite", ".sqlite3"}),
+]
+
+
+def sniff_type(head: bytes):
+    for sig, label, exts in MAGIC_TABLE:
+        if head.startswith(sig):
+            return label, exts
+    return None
+
+
+def _ext_match(path: Path, sniff) -> str:
+    if not sniff:
+        return "unknown"
+    _, ok_exts = sniff
+    return "ok" if path.suffix.lower() in ok_exts else "mismatch"
+
+
 def hash_all(path: Path) -> dict:
-    """Stream the file once and return md5, sha1, sha256 digests as a dict."""
+    """Stream the file once: compute MD5/SHA1/SHA256 and sniff the file signature."""
     md5    = hashlib.md5()
     sha1   = hashlib.sha1()
     sha256 = hashlib.sha256()
+    head = b""
     with path.open("rb") as f:
+        first = True
         while True:
             chunk = f.read(CHUNK)
             if not chunk:
                 break
+            if first:
+                head = chunk[:32]
+                first = False
             md5.update(chunk)
             sha1.update(chunk)
             sha256.update(chunk)
+    sniff = sniff_type(head)
     return {
-        "md5":    md5.hexdigest(),
-        "sha1":   sha1.hexdigest(),
-        "sha256": sha256.hexdigest(),
+        "md5":           md5.hexdigest(),
+        "sha1":          sha1.hexdigest(),
+        "sha256":        sha256.hexdigest(),
+        "detected_type": sniff[0] if sniff else "unknown",
+        "ext_match":     _ext_match(path, sniff),
     }
 
 
@@ -75,7 +113,9 @@ def inventory_one(path: Path, root: Path) -> dict:
 
 CSV_FIELDS = [
     "relative_path", "name", "size_bytes", "modified_utc",
-    "sha256", "md5", "sha1", "path", "error",
+    "sha256", "md5", "sha1",
+    "detected_type", "ext_match",
+    "path", "error",
 ]
 
 
@@ -115,7 +155,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"[{i:>5}] {p.relative_to(root)}", file=sys.stderr)
 
     write_csv(rows, args.output)
+    mismatches = sum(1 for r in rows if r.get("ext_match") == "mismatch")
     print(f"done — {len(rows)} files inventoried, manifest written to {args.output}")
+    if mismatches:
+        print(f"!! {mismatches} files with extension/content mismatches — worth investigating")
     return 0
 
 

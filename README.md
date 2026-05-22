@@ -3,6 +3,7 @@
 A small CLI tool that walks a folder, computes a SHA256 for every file, and
 writes a CSV manifest. Useful for snapshotting the contents of a directory so
 you can verify later that nothing changed.
+Also flags files whose extension doesn't match their actual content (e.g. a `.jpg` that's really a Windows binary).
 
 Pure Python standard library — no external dependencies.
 Tested on Python 3.8+.
