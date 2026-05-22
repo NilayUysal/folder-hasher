@@ -10,12 +10,26 @@ Tested on Python 3.8+.
 
 ## Usage
 
+Build a manifest of a folder:
+
 ```bash
-python3 folder_hasher.py ./my_evidence -o manifest.csv
+python3 folder_hasher.py hash ./my_evidence -o manifest.csv
 ```
 
-The tool walks the folder recursively, computes the SHA256 of every file, and
-writes a CSV with one row per file (path, size, modified time, hash).
+Verify a folder against an earlier manifest:
+
+```bash
+python3 folder_hasher.py verify ./my_evidence manifest.csv
+```
+
+The verify command exits `0` if everything matches and `1` if anything changed,
+was added, or was removed — useful in CI or shell pipelines.
+
+## Running tests
+
+```bash
+python3 -m pytest tests/
+```
 
 ## License
 

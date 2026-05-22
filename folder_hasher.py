@@ -127,22 +127,79 @@ def write_csv(rows: List[dict], out_path: Path) -> None:
             w.writerow(r)
 
 
+def verify(manifest_path: Path, root: Path) -> int:
+    """Re-hash the folder and diff against an existing manifest CSV."""
+    expected = {}
+    with manifest_path.open() as f:
+        for r in csv.DictReader(f):
+            expected[r["relative_path"]] = r
+
+    changed = []
+    added = []
+    seen = set()
+
+    for p in walk_files(root):
+        rel = str(p.relative_to(root))
+        seen.add(rel)
+        exp = expected.get(rel)
+        if exp is None:
+            added.append(rel)
+            continue
+        try:
+            digests = hash_all(p)
+        except OSError as e:
+            changed.append((rel, f"hash failed: {e}"))
+            continue
+        if digests["sha256"] != exp.get("sha256"):
+            changed.append((rel, "sha256 differs"))
+
+    removed = sorted(rel for rel in expected if rel not in seen)
+
+    print("== verification report ==")
+    print(f"manifest: {manifest_path}")
+    print(f"root:     {root}")
+    print(f"changed:  {len(changed)}   added: {len(added)}   removed: {len(removed)}")
+    for rel, why in changed:
+        print(f"  [CHANGED] {rel}   ({why})")
+    for rel in sorted(added):
+        print(f"  [ADDED]   {rel}")
+    for rel in removed:
+        print(f"  [REMOVED] {rel}")
+
+    return 0 if not (changed or added or removed) else 1
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="folder-hasher",
-        description="Walk a folder and write a SHA256 manifest as CSV.",
+        description="Build a forensic file manifest, or verify a folder against one.",
     )
-    p.add_argument("path", type=Path, help="Folder to inventory")
-    p.add_argument("-o", "--output", type=Path, default=Path("manifest.csv"),
-                   help="Output CSV file (default: manifest.csv)")
-    p.add_argument("--quiet", action="store_true",
-                   help="Don't print per-file progress on stderr")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    hp = sub.add_parser("hash", help="Build a manifest of the given folder.")
+    hp.add_argument("path", type=Path, help="Folder to inventory")
+    hp.add_argument("-o", "--output", type=Path, default=Path("manifest.csv"),
+                    help="Output CSV file (default: manifest.csv)")
+    hp.add_argument("--quiet", action="store_true",
+                    help="Don't print per-file progress on stderr")
+
+    vp = sub.add_parser("verify", help="Verify a folder against an existing manifest.")
+    vp.add_argument("path", type=Path, help="Folder to verify")
+    vp.add_argument("manifest", type=Path, help="Existing manifest CSV")
+
     return p
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
 
+    if args.cmd == "verify":
+        if not args.path.is_dir():
+            print(f"error: {args.path} is not a directory", file=sys.stderr)
+            return 2
+        return verify(args.manifest, args.path)
+
+    # default: hash
     root: Path = args.path
     if not root.exists() or not root.is_dir():
         print(f"error: {root} is not a directory", file=sys.stderr)
