@@ -1,5 +1,7 @@
 # folder-hasher
 
+![tests](https://github.com/NilayUysal/folder-hasher/actions/workflows/test.yml/badge.svg)
+
 A small CLI tool that walks a folder, computes a SHA256 for every file, and
 writes a CSV manifest. Useful for snapshotting the contents of a directory so
 you can verify later that nothing changed.
@@ -30,6 +32,8 @@ was added, or was removed — useful in CI or shell pipelines.
 ```bash
 python3 -m pytest tests/
 ```
+
+Changes between versions are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

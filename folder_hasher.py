@@ -16,6 +16,7 @@ import hashlib
 import os
 import sys
 from datetime import datetime, timezone
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
@@ -85,10 +86,18 @@ def _ts(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
 
 
-def walk_files(root: Path) -> Iterable[Path]:
+def walk_files(root: Path,
+               includes: Optional[List[str]] = None,
+               excludes: Optional[List[str]] = None) -> Iterable[Path]:
     for dirpath, _dirs, filenames in os.walk(root):
         for name in filenames:
-            yield Path(dirpath) / name
+            p = Path(dirpath) / name
+            rel = str(p.relative_to(root))
+            if includes and not any(fnmatch(rel, pat) for pat in includes):
+                continue
+            if excludes and any(fnmatch(rel, pat) for pat in excludes):
+                continue
+            yield p
 
 
 def inventory_one(path: Path, root: Path) -> dict:
@@ -182,6 +191,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                     help="Output CSV file (default: manifest.csv)")
     hp.add_argument("--quiet", action="store_true",
                     help="Don't print per-file progress on stderr")
+    hp.add_argument("--include", action="append", default=[], metavar="GLOB",
+                    help="Only include files matching this glob (can be passed multiple times)")
+    hp.add_argument("--exclude", action="append", default=[], metavar="GLOB",
+                    help="Exclude files matching this glob (can be passed multiple times)")
 
     vp = sub.add_parser("verify", help="Verify a folder against an existing manifest.")
     vp.add_argument("path", type=Path, help="Folder to verify")
@@ -206,7 +219,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
 
     rows: List[dict] = []
-    for i, p in enumerate(walk_files(root), 1):
+    for i, p in enumerate(walk_files(root, includes=args.include, excludes=args.exclude), 1):
         rows.append(inventory_one(p, root))
         if not args.quiet:
             print(f"[{i:>5}] {p.relative_to(root)}", file=sys.stderr)
