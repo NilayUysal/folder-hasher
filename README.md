@@ -10,6 +10,11 @@ Also flags files whose extension doesn't match their actual content (e.g. a `.jp
 Pure Python standard library — no external dependencies.
 Tested on Python 3.8+.
 
+## Background
+
+I wrote about why I built this and what I learned along the way (in Turkish):
+[Mührün altında ne var?](https://medium.com/@uysalnil94.nu/m%C3%BChr%C3%BCn-alt%C4%B1nda-ne-var-4c1645ba4ef2)
+
 ## Usage
 
 Build a manifest of a folder:
